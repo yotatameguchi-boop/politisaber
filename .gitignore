@@ -2,9 +2,9 @@ node_modules/
 .DS_Store
 *.log
 
-# ビルド生成物。engine.js + template.html から再生成できる。
-# ただし「配布物そのものを追跡したい」なら、この行を消してコミットする。
-politisaber.html
+# politisaber.html は生成物だが、クローンしてすぐ開けることに価値があるので追跡する。
+# 生成物を追跡したくない場合はこの下の行のコメントを外す。
+# politisaber.html
 
-# 予測スナップショットは追跡する（較正の唯一の材料なので消さない）
-# forecasts/ は .gitignore に入れないこと
+# forecasts/ は絶対に無視しないこと。
+# 予測時のスナップショットは較正を測る唯一の材料で、失うと復元できない。

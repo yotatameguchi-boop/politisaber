@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PolitiSABER | 開票速報ボード</title>
+<style>
+  :root{
+    --bg:#0B1220; --panel:#121B2E; --panel-2:#17223A; --hairline:#263049;
+    --text:#EDEFF2; --muted:#8B93A7;
+    --amber:#F2B705; --green:#3ECF8E; --red:#E8654A; --blue-tag:#5B8CFF;
+    --sans:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,system-ui,sans-serif;
+    --serif:"Hiragino Mincho ProN","Yu Mincho","MS PMincho",serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 600px at 15% -10%, rgba(242,183,5,0.06), transparent 60%),
+      radial-gradient(1000px 500px at 90% 10%, rgba(91,140,255,0.05), transparent 55%),
+      var(--bg);
+    color:var(--text); font-family:var(--sans); line-height:1.7;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:var(--mono);}
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;}
+
+  header.top{position:sticky; top:0; z-index:50; display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:14px 28px; background:rgba(11,18,32,0.86); backdrop-filter:blur(8px); border-bottom:1px solid var(--hairline);}
+  header.top .brand{display:flex; align-items:center; gap:10px; font-family:var(--mono);
+    font-size:14px; font-weight:700; letter-spacing:0.02em;}
+  header.top .brand .amber{color:var(--amber);}
+  header.top .brand .dot{width:8px;height:8px;border-radius:50%;background:var(--green); box-shadow:0 0 8px var(--green); animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+  header.top .updated{font-family:var(--mono); font-size:12px; color:var(--muted); text-align:right;}
+
+  .hero{max-width:980px; margin:0 auto; padding:56px 24px 32px;}
+  .eyebrow{font-family:var(--mono); font-size:12px; letter-spacing:0.18em; color:var(--amber);
+    text-transform:uppercase; margin-bottom:18px; display:flex; align-items:center; gap:10px;}
+  .eyebrow::before{content:"";width:22px;height:1px;background:var(--amber);display:inline-block;}
+  h1.title{font-family:var(--serif); font-weight:800; font-size:clamp(28px,5vw,48px); line-height:1.28; margin:0 0 4px;}
+  h1.title .sub{display:block; font-size:0.42em; color:var(--muted); font-weight:500; margin-top:8px;
+    font-family:var(--sans); letter-spacing:0.02em;}
+  .wordmark{font-family:var(--mono); font-weight:700; font-size:clamp(30px,6vw,52px);
+    letter-spacing:-0.01em; margin-bottom:18px; display:inline-flex; align-items:baseline;}
+  .wordmark .w2{color:var(--amber); text-shadow:0 0 26px rgba(242,183,5,0.45); margin-left:1px;}
+
+  .race-picker{display:flex; align-items:center; gap:10px; margin:26px 0 0; flex-wrap:wrap;}
+  .race-picker label{font-family:var(--mono); font-size:12px; color:var(--muted);}
+  select#raceSelect{background:var(--panel); color:var(--text); border:1px solid var(--hairline);
+    border-radius:8px; padding:9px 14px; font-family:var(--sans); font-size:14px; cursor:pointer; max-width:100%;}
+  select#raceSelect:focus-visible{outline:2px solid var(--amber); outline-offset:2px;}
+
+  .board{margin-top:18px; background:linear-gradient(180deg,var(--panel),var(--panel-2));
+    border:1px solid var(--hairline); border-radius:14px; padding:26px; box-shadow:0 30px 60px -30px rgba(0,0,0,0.6);}
+  .board-head{display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:10px; margin-bottom:20px;}
+  .board-head .race-name{font-family:var(--mono); font-size:13px; color:var(--muted); letter-spacing:.04em;}
+  .badge{font-family:var(--mono); font-size:12px; padding:5px 10px; border-radius:999px; white-space:nowrap;}
+  .badge.pending{color:var(--blue-tag); border:1px solid rgba(91,140,255,.35); background:rgba(91,140,255,.1);}
+  .badge.decided{color:var(--green); border:1px solid rgba(62,207,142,.35); background:rgba(62,207,142,.1);}
+  .badge.norecord{color:var(--muted); border:1px solid var(--hairline); background:rgba(139,147,167,.1);}
+
+  .margin-strip{display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;
+    background:rgba(91,140,255,0.07); border:1px solid rgba(91,140,255,0.22); border-radius:10px;
+    padding:12px 16px; margin-bottom:18px;}
+  .margin-strip .ms-label{font-family:var(--mono); font-size:11px; letter-spacing:.1em; color:var(--blue-tag); text-transform:uppercase;}
+  .margin-strip .ms-val{font-family:var(--mono); font-size:20px; font-weight:700;}
+  .margin-strip .ms-ci{font-family:var(--mono); font-size:12px; color:var(--muted);}
+
+  .candidate-row{display:grid; grid-template-columns:170px 1fr 168px; align-items:center; gap:16px;
+    padding:13px 0; border-top:1px solid var(--hairline);}
+  .candidate-row:first-of-type{border-top:none;}
+  .cname{font-weight:700; font-size:15px;}
+  .cname .tag{display:block; font-size:11px; color:var(--muted); font-weight:500; margin-top:2px;}
+  .bar-track{position:relative; height:30px; background:#0D1526; border-radius:6px; overflow:hidden; border:1px solid var(--hairline);}
+  .bar-fill{position:absolute; top:0; left:0; bottom:0; width:0%; border-radius:6px; transition:width 1.1s cubic-bezier(.16,1,.3,1);}
+  .bar-fill.win{background:linear-gradient(90deg,#2A9D6E,var(--green));}
+  .bar-fill.lose{background:linear-gradient(90deg,#3A4664,#4C5A80);}
+  .ci-band{position:absolute; top:0; bottom:0; background:rgba(237,239,242,0.10);
+    border-left:2px solid rgba(237,239,242,0.45); border-right:2px solid rgba(237,239,242,0.45);}
+  .ci-label{font-size:10px; color:var(--muted); margin-top:3px; font-family:var(--mono);}
+  .pctwrap{text-align:right;}
+  .pct{font-family:var(--mono); font-weight:700; font-size:19px;}
+  .pct.win{color:var(--green);}
+  .pctsub{font-size:11px; color:var(--muted); font-family:var(--mono);}
+  .votes{font-size:12px; color:var(--muted); font-family:var(--mono); margin-top:2px;}
+  .votes.flag{color:var(--amber);}
+  .board-foot{margin-top:16px; padding-top:14px; border-top:1px dashed var(--hairline); font-size:12.5px; color:var(--muted);}
+  .board-foot p{margin:0 0 6px;} .board-foot p:last-child{margin-bottom:0;}
+  .board-foot .warn{color:var(--amber);} .board-foot b{color:var(--text);}
+
+  section{max-width:980px; margin:0 auto; padding:56px 24px;}
+  section.divider-top{border-top:1px solid var(--hairline);}
+  h2.section-title{font-family:var(--serif); font-weight:700; font-size:clamp(22px,3.2vw,30px); margin:0 0 20px;}
+  p.lede{margin:-8px 0 22px; color:var(--muted); font-size:14px;}
+
+  .tier{display:flex; gap:14px; align-items:flex-start; padding:16px 0; border-top:1px solid var(--hairline);}
+  .tier:first-child{border-top:none;}
+  .tier-badge{flex:0 0 auto; font-family:var(--mono); font-size:11px; font-weight:700; padding:4px 10px;
+    border-radius:5px; letter-spacing:.03em; white-space:nowrap; margin-top:2px;}
+  .tier-badge.hard{background:rgba(62,207,142,0.14); color:var(--green); border:1px solid rgba(62,207,142,0.35);}
+  .tier-badge.fact{background:rgba(91,140,255,0.14); color:var(--blue-tag); border:1px solid rgba(91,140,255,0.35);}
+  .tier-badge.uncertain{background:rgba(242,183,5,0.14); color:var(--amber); border:1px solid rgba(242,183,5,0.35);}
+  .tier-badge.excluded{background:rgba(139,147,167,0.12); color:var(--muted); border:1px solid var(--hairline);}
+  .tier-body h4{margin:0; font-size:14.5px; font-weight:700;}
+  .tier-body p{margin:4px 0 0; font-size:13px; color:var(--muted);}
+  .tier-body .big{font-family:var(--mono); font-size:22px; font-weight:700; color:var(--text);}
+  .scorecard{background:var(--panel); border:1px solid var(--hairline); border-radius:12px; padding:6px 22px;}
+
+  .callout{border-left:3px solid var(--green); background:rgba(62,207,142,0.06); padding:16px 18px;
+    border-radius:0 10px 10px 0; font-size:14px; margin-top:22px;}
+  .callout.warn{border-left-color:var(--amber); background:rgba(242,183,5,0.06);}
+  .callout b{color:var(--green);} .callout.warn b{color:var(--amber);}
+  .callout ul{margin:8px 0 0; padding-left:20px;} .callout li{margin:4px 0;}
+  code{font-family:var(--mono); font-size:0.92em; background:rgba(255,255,255,0.06); padding:1px 5px; border-radius:4px;}
+
+  table.params{width:100%; border-collapse:collapse; font-size:13px;}
+  table.params th, table.params td{text-align:left; padding:10px 12px; border-bottom:1px solid var(--hairline); vertical-align:top;}
+  table.params th{font-family:var(--mono); font-size:11px; letter-spacing:.06em; color:var(--muted); text-transform:uppercase; font-weight:700;}
+  table.params td.v{font-family:var(--mono); font-weight:700; white-space:nowrap;}
+  table.params td.src{color:var(--muted); font-size:12px;}
+  .tblwrap{overflow-x:auto; background:var(--panel); border:1px solid var(--hairline); border-radius:12px;}
+  .fitted{color:var(--green);} .unfitted{color:var(--amber);}
+
+  .race-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px;}
+  details.race-card{background:var(--panel); border:1px solid var(--hairline); border-radius:12px; overflow:hidden;}
+  details.race-card summary{list-style:none; cursor:pointer; padding:16px 18px; display:flex;
+    align-items:center; justify-content:space-between; gap:10px;}
+  details.race-card summary::-webkit-details-marker{display:none;}
+  details.race-card summary:focus-visible{outline:2px solid var(--amber); outline-offset:-2px;}
+  .rc-title{font-weight:700; font-size:14.5px;}
+  .rc-date{font-size:11.5px; color:var(--muted); font-family:var(--mono); margin-top:3px;}
+  .rc-chips{display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:flex-end;}
+  .rc-chip{font-family:var(--mono); font-size:10.5px; font-weight:700; padding:3px 8px; border-radius:5px; white-space:nowrap;}
+  .rc-chip.hit{background:rgba(62,207,142,0.14); color:var(--green); border:1px solid rgba(62,207,142,0.35);}
+  .rc-chip.miss{background:rgba(232,101,74,0.14); color:var(--red); border:1px solid rgba(232,101,74,0.35);}
+  .rc-chip.pending{background:rgba(91,140,255,0.14); color:var(--blue-tag); border:1px solid rgba(91,140,255,0.35);}
+  .rc-chip.norecord{background:rgba(139,147,167,0.12); color:var(--muted); border:1px solid var(--hairline);}
+  .rc-chip.mae{background:transparent; color:var(--muted); border:1px solid var(--hairline);}
+  .rc-arrow{transition:transform .2s; color:var(--muted); font-size:12px;}
+  details[open] .rc-arrow{transform:rotate(90deg);}
+  .rc-body{padding:0 18px 18px;}
+  .rc-cand{display:grid; grid-template-columns:130px 1fr 62px; align-items:center; gap:10px;
+    padding:8px 0; border-top:1px solid var(--hairline); font-size:13px;}
+  .rc-cand:first-of-type{border-top:none;}
+  .rc-cand .n{font-weight:600;}
+  .rc-cand .n small{display:block; font-size:10.5px; color:var(--muted); font-weight:400;}
+  .rc-cand .n small.flag{color:var(--amber);}
+  .rc-bar{height:18px; background:#0D1526; border-radius:4px; overflow:hidden; border:1px solid var(--hairline); position:relative;}
+  .rc-bar i{position:absolute; top:0; left:0; bottom:0; border-radius:4px;}
+  .rc-bar i.win{background:linear-gradient(90deg,#2A9D6E,var(--green));}
+  .rc-bar i.lose{background:linear-gradient(90deg,#3A4664,#4C5A80);}
+  .rc-pct{font-family:var(--mono); text-align:right; font-size:13px; font-weight:700;}
+  .rc-src{font-size:11.5px; color:#5C6883; margin-top:10px; padding-top:10px; border-top:1px dashed var(--hairline);}
+  .rc-src p{margin:0 0 4px;} .rc-src p:last-child{margin-bottom:0;}
+  .rc-src .warn{color:var(--amber);}
+
+  footer{max-width:980px; margin:0 auto; padding:44px 24px 70px; border-top:1px solid var(--hairline); color:var(--muted); font-size:13px;}
+  footer .fmono{font-family:var(--mono); font-size:11.5px;}
+  footer b{color:var(--text);}
+  ::selection{background:rgba(242,183,5,0.3);}
+  a:focus-visible,button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--amber); outline-offset:3px; border-radius:3px;}
+
+  @media (max-width:680px){
+    header.top{padding:12px 16px;}
+    .hero{padding:36px 16px 24px;}
+    section{padding:40px 16px;}
+    footer{padding:36px 16px 56px;}
+    .board{padding:18px 16px;}
+    .candidate-row{grid-template-columns:1fr; gap:8px; padding:16px 0;}
+    .pctwrap{text-align:left; display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;}
+    .pctwrap .votes{margin-top:0;}
+    .rc-cand{grid-template-columns:1fr; gap:6px;}
+    .rc-pct{text-align:left;}
+    .rc-chips{justify-content:flex-start;}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .bar-fill,.rc-bar i{transition:none !important;}
+    header.top .brand .dot{animation:none;}
+    *{scroll-behavior:auto !important;}
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand"><span class="dot" aria-hidden="true"></span> Politi<span class="amber">SABER</span></div>
+  <div class="updated">データ最終更新 <span class="mono" id="updatedDate">—</span></div>
+</header>
+
+<div class="hero">
+  <div class="wordmark" aria-hidden="true"><span class="w1">Politi</span><span class="w2">SABER</span></div>
+  <h1 class="title">全国の知事選、勝率と得票数まで。<span class="sub">実データに基づく試算 — 随時更新</span></h1>
+
+  <div class="race-picker">
+    <label for="raceSelect">表示するレース:</label>
+    <select id="raceSelect"></select>
+  </div>
+
+  <div class="board" id="board" role="region" aria-live="polite" aria-label="選択したレースの予測結果"></div>
+</div>
+
+<section class="divider-top" id="scorecard">
+  <div class="eyebrow" style="margin-bottom:8px;">Track Record</div>
+  <h2 class="section-title">モデルはどれくらい当たっているのか</h2>
+  <div class="scorecard" id="scoreTiers"></div>
+  <div class="callout" id="scoreNote"></div>
+  <div class="callout warn" id="scoreCaveat"></div>
+</section>
+
+<section class="divider-top" id="method">
+  <div class="eyebrow" style="margin-bottom:8px;">Methodology</div>
+  <h2 class="section-title">モデルの中身と、その係数がどこから来たか</h2>
+  <p class="lede">
+    予測は「得票率の相対シェア」「未モデル化候補の質量」「投票総数」の3つを別々に引き、掛け合わせて作ります。
+    係数のうち<span class="fitted">緑</span>は過去レースの残差から実測したもの、<span class="unfitted">黄</span>はまだデータが足りず仮置き・無効化しているものです。
+  </p>
+  <div class="tblwrap"><table class="params" id="paramTable"></table></div>
+  <div class="callout" id="methodNote"></div>
+</section>
+
+<section class="divider-top">
+  <div class="eyebrow" style="margin-bottom:8px;">全レース</div>
+  <h2 class="section-title">地域ごとの詳細</h2>
+  <div class="race-grid" id="raceGrid"></div>
+</section>
+
+<footer>
+  <p class="fmono" id="footModel">POLITISABER MODEL v2</p>
+  <p><b>「的中」の定義</b>：予測トップの候補が実際に当選したこと。得票率の正確さは別指標（平均絶対誤差）で表示しています。当選者を当てても得票率が大きく外れているケースがあります。</p>
+  <p><b>予測は再現できます</b>：乱数はシード固定なので、同じデータからは何度実行しても同じ数字が出ます。</p>
+  <p>個人的な検証であり公式な選挙予測ではありません。確定済み結果には出典を明記。未実施のレースは投開票後に追記します。</p>
+</footer>
+
+<script>
+/*__ENGINE__*/
+
+/* =========================================================
+   DATA
+   status: "pending"(未実施) | "decided"(結果確定済み)
+   candidates[]:
+     center      … pending: モデルへ渡す中心得票率(%)
+     predicted   … decided: 予測時に出していた得票率(%)。無ければ null
+     actual      … decided: 実際の得票率(%)
+     incumbent   … 現職か
+     splitGroup  … 票を奪い合う組（保守分裂など）。共分散に負相関が入る
+     unverified  … 一次ソースで実数を確認できていない
+   fieldConfirmed … 告示済みで候補者名簿が確定しているか
+   polls[]        … 情勢調査。shares(数値) または lean(定性) を持つ
+========================================================= */
+const LAST_UPDATED = "2026-08-09";
+
+const RACES = [
+  {
+    id:"nagano2026", name:"長野県知事選", date:"2026-08-09", status:"pending",
+    type:"現職安泰", fieldConfirmed:true, assumedTotalVotes:693617,
+    source:"2022年長野県知事選確定得票(阿部守一88.8%)を土台",
+    polls:[{ source:"信濃毎日新聞 情勢報道", date:"2026-08-05",
+             lean:{ "阿部守一":"優位", "武田良介":"追う" } }],
+    candidates:[
+      {name:"阿部守一", tag:"現職・5期目に挑戦", center:86.0, incumbent:true},
+      {name:"武田良介", tag:"新人・共産党推薦",  center:14.0, incumbent:false},
+    ],
+  },
+  {
+    id:"okinawa2026", name:"沖縄県知事選", date:"2026-09-13", status:"pending",
+    type:"三つ巴", fieldConfirmed:false, assumedTotalVotes:668367,
+    source:"琉球新報(直近知事選 確定開票結果)",
+    candidates:[
+      {name:"玉城デニー", tag:"現職・3選目",         center:49.4, incumbent:true},
+      {name:"古謝玄太",   tag:"新人・前那覇市副市長", center:42.1, incumbent:false},
+      {name:"下地幹郎",   tag:"新人・元衆院議員",     center: 8.5, incumbent:false},
+    ],
+  },
+  {
+    id:"nagasaki2026", name:"長崎県知事選", date:"2026-02-08", status:"decided",
+    type:"保守分裂", source:"日本経済新聞 2026/2/8",
+    fieldConfirmed:false, predTotal:662701, actTotal:617087,
+    candidates:[
+      {name:"平田研",   tag:"新人・元副知事", predicted:53.5, predictedVotes:354545, actual:48.3, actualVotes:298053, winner:true,  incumbent:false, splitGroup:"保守"},
+      {name:"大石賢吾", tag:"現職",           predicted:41.4, predictedVotes:274358, actual:47.2, actualVotes:291265, winner:false, incumbent:true,  splitGroup:"保守"},
+      {name:"(掲載外の候補)", tag:"上位2名以外の合計", predicted:null, predictedVotes:null, actual:4.5, actualVotes:27769, winner:false, incumbent:false, derived:true},
+    ],
+  },
+  {
+    id:"ishikawa2026", name:"石川県知事選", date:"2026-03-08", status:"decided",
+    type:"保守分裂", source:"日本経済新聞 2026/3/8",
+    note:"投票総数の想定が実際より約3割大きく、票数ベースの予測は大きく外れた。得票率の順位は的中。",
+    fieldConfirmed:false, predTotal:523601, actTotal:394442,
+    candidates:[
+      {name:"山野之義", tag:"新人・元金沢市長", predicted:52.1, predictedVotes:272796, actual:49.8, actualVotes:196432, winner:true,  incumbent:false, splitGroup:"保守"},
+      {name:"馳浩",     tag:"現職",             predicted:42.9, predictedVotes:224624, actual:47.8, actualVotes:188450, winner:false, incumbent:true,  splitGroup:"保守"},
+      {name:"(掲載外の候補)", tag:"上位2名以外の合計", predicted:null, predictedVotes:null, actual:2.4, actualVotes:9560, winner:false, incumbent:false, derived:true},
+    ],
+  },
+  {
+    id:"osaka2026", name:"大阪府知事選", date:"2026-02-08", status:"decided",
+    type:"現職安泰", source:"共同通信 2026/2/8",
+    fieldConfirmed:true, predTotal:3620000, actTotal:3620800,
+    candidates:[
+      {name:"吉村洋文", tag:"現職", predicted:80.6, predictedVotes:2917720, actual:83.2, actualVotes:3012640, winner:true,  incumbent:true},
+      {name:"大西恒樹", tag:"新人", predicted:19.4, predictedVotes:702280,  actual:16.8, actualVotes:608160,  winner:false, incumbent:false},
+    ],
+  },
+  {
+    id:"kyoto2026", name:"京都府知事選", date:"2026-04-05", status:"decided",
+    type:"現職安泰", source:"共同通信 2026/4/5",
+    note:"2人レースとして予測を立てたが実際は3人が出馬。予測に入れていなかった藤井氏が20.07%を得たため濱田氏の予測が13pt過大になった。誤差の主因は統計ではなく候補者名簿の確認漏れ。",
+    fieldConfirmed:false, predTotal:844000, actTotal:743861,
+    candidates:[
+      {name:"西脇隆俊", tag:"現職",            predicted:62.5, predictedVotes:527500, actual:55.46, actualVotes:412533, winner:true,  incumbent:true},
+      {name:"濱田聡",   tag:"新人",            predicted:37.5, predictedVotes:316500, actual:24.47, actualVotes:181998, winner:false, incumbent:false},
+      {name:"藤井伸生", tag:"新人・予測対象外", predicted:null, predictedVotes:null,   actual:20.07, actualVotes:149330, winner:false, incumbent:false},
+    ],
+  },
+  {
+    id:"fukui2026", name:"福井県知事選", date:"2026-01-25", status:"decided",
+    type:"空席", source:"福井県選挙管理委員会 確定開票結果",
+    note:"モデルは山田氏50.2% / 石田氏49.8%（勝率53.7%）と、事実上のコイントスとして山田氏をわずかに優位に置いた。結果は石田氏が当選し不的中。ただし Brier 0.288 はコイン投げ(0.250)とほぼ同等で、これは『失敗』ではなく『情報が無かった』と読むのが正しい。",
+    fieldConfirmed:false, predTotal:318000, actTotal:280645, winProb:0.537, winProbOn:"山田賢一",
+    candidates:[
+      {name:"石田嵩人", tag:"新人・元外務省職員",         predicted:49.8, predictedVotes:158364, actual:47.97, actualVotes:134620, winner:true,  incumbent:false},
+      {name:"山田賢一", tag:"新人・前越前市長",           predicted:50.2, predictedVotes:159636, actual:46.43, actualVotes:130290, winner:false, incumbent:false},
+      {name:"金元幸枝", tag:"新人・共産党推薦・予測対象外", predicted:null, predictedVotes:null, actual:5.61, actualVotes:15735, winner:false, incumbent:false},
+    ],
+  },
+  {
+    id:"niigata2026", name:"新潟県知事選", date:"2026-05-31", status:"decided",
+    type:"現職安泰", source:"NHK 2026/6/1",
+    note:"このレースは事前予測を記録していない（結果のみの記録）。成績集計・係数推定の両方から除外している。",
+    candidates:[
+      {name:"花角英世", tag:"現職", predicted:null, predictedVotes:null, actual:61.84, actualVotes:554012, winner:true,  incumbent:true},
+      {name:"土田竜吾", tag:"新人", predicted:null, predictedVotes:null, actual:26.57, actualVotes:238070, winner:false, incumbent:false},
+      {name:"安中聡",   tag:"新人", predicted:null, predictedVotes:null, actual:11.59, actualVotes:103820, winner:false, incumbent:false},
+    ],
+  },
+  {
+    id:"shiga2026", name:"滋賀県知事選", date:"2026-07-05", status:"decided",
+    type:"対抗馬分裂", source:"日本経済新聞 2026/7/5",
+    note:"このレースも事前予測を記録していない。加えて2位・3位が1票単位で同数という記録になっており、一次ソースでの再確認が必要。成績集計・係数推定の両方から除外している。",
+    candidates:[
+      {name:"三日月大造", tag:"現職", predicted:null, predictedVotes:null, actual:68.37, actualVotes:318756, winner:true,  incumbent:true},
+      {name:"坪田五久男", tag:"新人", predicted:null, predictedVotes:null, actual:15.82, actualVotes:73739, winner:false, incumbent:false, unverified:true},
+      {name:"大隅元侍",   tag:"新人", predicted:null, predictedVotes:null, actual:15.82, actualVotes:73739, winner:false, incumbent:false, unverified:true},
+    ],
+  },
+];
+
+/* ---------- ユーティリティ ---------- */
+const ESC_MAP = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
+const esc = s => String(s ?? '').replace(/[&<>"']/g, m => ESC_MAP[m]);
+const nf  = n => Number(n).toLocaleString('ja-JP');
+const p1  = n => Number(n).toFixed(1);
+const fmtDate = iso => new Date(iso + "T00:00:00").toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
+const signed  = n => (n >= 0 ? '+' : '−') + Math.abs(n).toFixed(1);
+// 0%/100% と断言しない。シミュレーション回数を根拠に表現する。
+const fmtProb = (p, sims) => {
+  if (p <= 0)   return `&lt;${(100/sims).toFixed(3)}%`;
+  if (p >= 100) return `&gt;${(100 - 100/sims).toFixed(3)}%`;
+  return p.toFixed(1) + '%';
+};
+
+/* ---------- RACES → HISTORY（係数推定用） ---------- */
+function toHistory(races){
+  return races
+    .filter(r => r.status === 'decided' && r.candidates.some(c => c.predicted != null))
+    .map(r => {
+      const top = r.candidates.filter(c => c.predicted != null)
+                              .reduce((a,b) => a.predicted > b.predicted ? a : b);
+      return {
+        name: r.name, type: r.type,
+        // ★date は walk-forward の並べ替えに必須。落とすと時系列順にならず
+        //   「未来のレースで学習して過去を予測する」ことになってしまう。
+        date: r.date,
+        // ★fieldConfirmed を落とすと全レースが「告示前」扱いになり、
+        //   その他成分が過大に乗って予測がずれる。
+        fieldConfirmed: r.fieldConfirmed ?? false,
+        predTotal: r.predTotal, actTotal: r.actTotal,
+        winnerName: (r.candidates.find(c => c.winner) || {}).name,
+        predTopName: top.name,
+        winProb: r.winProb ?? null, winProbOn: r.winProbOn ?? null,
+        cands: r.candidates.map(c => ({
+          name:c.name, incumbent:!!c.incumbent,
+          predicted:c.predicted ?? null, actual:c.actual ?? null,
+        })),
+      };
+    });
+}
+
+const HISTORY = toHistory(RACES);
+const PARAMS  = fitParams(HISTORY);
+
+/* 交差検証。1〜5 の指標はすべて自己採点なので必ず甘く出る。
+   伏せたレースを予測し直して外から測る。表示用に試行回数は落としてある。 */
+const CV   = crossValidate(HISTORY, { mode:'loo',         sims:2000 });
+const CVWF = crossValidate(HISTORY, { mode:'walkforward', sims:2000 });
+
+/* pending レースをモデルで予測（全国ショックを共有して同時に回す） */
+const PENDING = RACES.filter(r => r.status === 'pending').map(r => ({
+  id: r.id, name: r.name, type: r.type,
+  fieldConfirmed: r.fieldConfirmed,
+  assumedTotalVotes: r.assumedTotalVotes,
+  polls: r.polls,
+  candidates: r.candidates,
+}));
+const FORECASTS = forecastAll(PENDING, PARAMS).forecasts;
+
+/* ---------- レース単位の派生値 ---------- */
+const withPred  = r => r.candidates.filter(c => c.predicted != null);
+const winnerOf  = r => r.candidates.find(c => c.winner === true) || null;
+const topPredicted = r => {
+  const cs = withPred(r);
+  return cs.length ? cs.reduce((a,b) => a.predicted > b.predicted ? a : b) : null;
+};
+function outcomeOf(race){
+  if (race.status === 'pending') return 'pending';
+  const p = topPredicted(race), w = winnerOf(race);
+  if (!p || !w) return 'norecord';
+  return p.name === w.name ? 'hit' : 'miss';
+}
+function maeOf(race){
+  const cs = race.candidates.filter(c => c.predicted != null && c.actual != null);
+  return cs.length ? cs.reduce((s,c) => s + Math.abs(c.actual - c.predicted), 0) / cs.length : null;
+}
+const shareSum = (race,key) => race.candidates.reduce((s,c) => s + (c[key] != null ? c[key] : 0), 0);
+function actualTotalOf(race){
+  const cs = race.candidates.filter(c => c.actualVotes != null);
+  return cs.length ? cs.reduce((s,c) => s + c.actualVotes, 0) : null;
+}
+
+/* ---------- ボード ---------- */
+function renderBoard(race){
+  const board = document.getElementById('board');
+  const outcome = outcomeOf(race);
+  const isPending = race.status === 'pending';
+  const f = FORECASTS[race.id];
+
+  const badge = {
+    pending :'<span class="badge pending">判定待ち</span>',
+    hit     :'<span class="badge decided">結果確定済み</span>',
+    miss    :'<span class="badge decided">結果確定済み</span>',
+    norecord:'<span class="badge norecord">事後記録・事前予測なし</span>',
+  }[outcome];
+
+  let marginHtml = '';
+  if (isPending && f){
+    marginHtml = `
+      <div class="margin-strip">
+        <span class="ms-label">予想リード</span>
+        <span class="ms-val">${esc(f.margin.leader)} ${signed(f.margin.point)}pt</span>
+        <span class="ms-ci">90%区間 ${signed(f.margin.ci[0])} – ${signed(f.margin.ci[1])}pt</span>
+        <span class="ms-ci">逆転しない確率 ${fmtProb(f.margin.prob, f.sims)}</span>
+      </div>`;
+  }
+
+  const rows = race.candidates.map(c => {
+    const fc = isPending && f ? f.candidates.find(x => x.name === c.name) : null;
+    const barValue = isPending ? (fc ? fc.share : null) : c.actual;
+    if (barValue == null) return '';
+    const isTop = isPending
+      ? (f && f.candidates.reduce((a,b) => a.winProb > b.winProb ? a : b).name === c.name)
+      : c.winner === true;
+    const barClass = isTop ? 'win' : 'lose';
+
+    const ciHtml  = fc ? `<div class="ci-band" style="left:${fc.shareCI[0]}%; width:${Math.max(fc.shareCI[1]-fc.shareCI[0],0.4)}%"></div>` : '';
+    const ciLabel = fc ? `<div class="ci-label">90%区間: ${p1(fc.shareCI[0])}% – ${p1(fc.shareCI[1])}%（単体上の同時分布から算出）</div>` : '';
+
+    let numberBlock, subLabel;
+    if (isPending && fc){
+      numberBlock =
+        `<div class="pct ${barClass==='win'?'win':''}">` +
+          `<span class="sr-only">${p1(fc.share)}%</span>` +
+          `<span class="count" data-target="${fc.share}" aria-hidden="true">${p1(fc.share)}</span><span aria-hidden="true">%</span>` +
+        `</div>` +
+        (fc.votes != null
+          ? `<div class="votes">${nf(fc.votes)}票(予想)</div><div class="votes">90%区間 ${nf(fc.votesCI[0])} – ${nf(fc.votesCI[1])}</div>`
+          : `<div class="votes">票数予測なし</div>`);
+      subLabel = `勝率 ${fmtProb(fc.winProb, f.sims)}`;
+    } else {
+      const predLine = (c.predicted != null)
+        ? `<div class="votes">予想 ${p1(c.predicted)}%${c.predictedVotes!=null?'('+nf(c.predictedVotes)+'票)':''} / 誤差 ${signed(c.actual-c.predicted)}pt</div>`
+        : `<div class="votes">${c.derived ? '推計値（掲載外の合計）' : '事前予測なし'}</div>`;
+      numberBlock =
+        `<div class="pct ${barClass==='win'?'win':''}">` +
+          `<span class="sr-only">${p1(c.actual)}%</span>` +
+          `<span class="count" data-target="${c.actual}" aria-hidden="true">${p1(c.actual)}</span><span aria-hidden="true">%</span>` +
+        `</div>` +
+        `<div class="votes${c.unverified?' flag':''}">実際 ${nf(c.actualVotes)}票${c.unverified?' ⚠実数未確認':''}</div>` +
+        predLine;
+      subLabel = c.derived ? '—' : (c.winner ? '当選' : '落選');
+    }
+
+    const barLabel = `${c.name} ${p1(barValue)}%${isTop ? (isPending?'（予測トップ）':'（当選）') : ''}`;
+    return `
+      <div class="candidate-row">
+        <div class="cname">${esc(c.name)}<span class="tag">${esc(c.tag)}</span></div>
+        <div>
+          <div class="bar-track" role="img" aria-label="${esc(barLabel)}">
+            <div class="bar-fill ${barClass}" data-target="${barValue}" style="width:${barValue}%"></div>${ciHtml}
+          </div>
+          ${ciLabel}
+        </div>
+        <div class="pctwrap">${numberBlock}<div class="pctsub">${subLabel}</div></div>
+      </div>`;
+  }).join('');
+
+  const foot = [];
+  foot.push(`<p>出典: ${esc(race.source)}</p>`);
+  if (race.note) foot.push(`<p>注記: ${esc(race.note)}</p>`);
+
+  if (isPending && f){
+    foot.push(`<p>モデル: 単体上のロジット正規サンプリング ${nf(f.sims)}回 · 得票率σ <b>${f.sdPtUsed.toFixed(2)}pt</b>` +
+      `${f.sdPtIsFallback ? '（この類型の過去データが無くプール値を使用）' : `（類型「${esc(race.type)}」の実測残差）`}</p>`);
+    foot.push(`<p>未モデル化候補の想定: 出現確率 <b>${f.other.presence.toFixed(0)}%</b> · 中央値 ${f.other.median.toFixed(1)}% · 95%点 ${f.other.p95.toFixed(1)}%` +
+      `${race.fieldConfirmed ? '（告示済みで名簿確定のためほぼ0）' : '（告示前のため厚めに置いている）'}</p>`);
+    if (f.pollsUsed && f.pollsUsed.length){
+      foot.push(`<p>情勢調査: ${f.pollsUsed.map(p => `${esc(p.source)}(${esc(p.date)}, ${p.quantitative?'数値あり':'定性のみ'})`).join(' / ')}` +
+        `${f.pollsUsed.every(p => !p.quantitative) ? ' — 数値が無い調査は情報量が乏しく、中心値はほとんど動きません。' : ''}</p>`);
+    }
+    if (f.turnout){
+      const adj = (f.turnout.mean / f.turnout.assumed - 1) * 100;
+      foot.push(`<p>投票総数: <b>${nf(f.turnout.mean)}票</b> · 90%区間 ${nf(f.turnout.ci[0])} – ${nf(f.turnout.ci[1])}` +
+        `（素の想定 ${nf(f.turnout.assumed)}票に過去の過大バイアス補正 ${signed(adj)}% を適用）</p>`);
+    }
+    foot.push(`<p class="warn">⚠ 勝率はシミュレーション上の頻度です。係数はすべて ${HISTORY.length} レースから推定したもので、確定した性能ではありません。</p>`);
+  }
+
+  const predSum = shareSum(race,'predicted'), actSum = shareSum(race,'actual');
+  const covers = [];
+  if (!isPending && predSum > 0 && predSum < 99.5) covers.push(`予測 ${p1(100-predSum)}%`);
+  if (!isPending && actSum  > 0 && actSum  < 99.5) covers.push(`実際 ${p1(100-actSum)}%`);
+  if (covers.length) foot.push(`<p class="warn">⚠ 掲載外の候補分（${covers.join(' / ')}）はバーに含まれていません。</p>`);
+
+  if (!isPending){
+    if (race.predTotal && race.actTotal){
+      foot.push(`<p>投票総数: 想定 ${nf(race.predTotal)}票 → 実際 ${nf(race.actTotal)}票（<b>${signed((race.predTotal/race.actTotal-1)*100)}%</b>）。得票率の誤差と投票率の誤差は別物です。</p>`);
+    } else {
+      const aT = actualTotalOf(race);
+      if (aT) foot.push(`<p>投票総数（実際）: ${nf(aT)}票</p>`);
+    }
+    const mae = maeOf(race);
+    if (mae != null) foot.push(`<p>得票率の平均絶対誤差: <b>${mae.toFixed(2)}pt</b>（予測を出した候補のみ）</p>`);
+  }
+
+  board.innerHTML = `
+    <div class="board-head">
+      <div class="race-name">${esc(race.name)} ${fmtDate(race.date)}${isPending?' · モンテカルロ予測':''}</div>
+      ${badge}
+    </div>
+    ${marginHtml}${rows}
+    <div class="board-foot mono">${foot.join('')}</div>`;
+  animate(board);
+}
+
+function animate(root){
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  root.querySelectorAll('.bar-fill').forEach(bar => {
+    const t = bar.getAttribute('data-target');
+    bar.style.width = '0%';
+    requestAnimationFrame(() => bar.style.width = t + '%');
+  });
+  root.querySelectorAll('.count').forEach(el => {
+    const t = parseFloat(el.getAttribute('data-target'));
+    if (!isFinite(t)) return;
+    const start = performance.now();
+    (function tick(now){
+      const p = Math.min((now - start)/1100, 1);
+      el.textContent = (t * (1 - Math.pow(1-p,3))).toFixed(1);
+      if (p < 1) requestAnimationFrame(tick);
+    })(performance.now());
+  });
+}
+
+/* ---------- プルダウン ---------- */
+function renderPicker(){
+  const sel = document.getElementById('raceSelect');
+  const icon = r => r.status === 'pending' ? '🔵'
+    : ({hit:'✅', miss:'❌', norecord:'⚪️'}[outcomeOf(r)] || '⚪️');
+  sel.innerHTML = RACES.map(r => `<option value="${esc(r.id)}">${icon(r)} ${esc(r.name)}（${fmtDate(r.date)}）</option>`).join('');
+  sel.addEventListener('change', () => {
+    const race = RACES.find(r => r.id === sel.value);
+    if (race) renderBoard(race);
+  });
+  const today = new Date().toISOString().slice(0,10);
+  const upcoming = RACES.filter(r => r.status === 'pending' && r.date >= today).sort((a,b) => a.date < b.date ? -1 : 1);
+  const def = upcoming[0] || RACES.find(r => r.status === 'pending') || RACES[0];
+  sel.value = def.id;
+  renderBoard(def);
+}
+
+/* ---------- 成績表 ---------- */
+function renderScorecard(){
+  const graded  = RACES.filter(r => r.status === 'decided' && withPred(r).length > 0);
+  const skipped = RACES.filter(r => r.status === 'decided' && withPred(r).length === 0);
+  const hits    = graded.filter(r => outcomeOf(r) === 'hit');
+  const misses  = graded.filter(r => outcomeOf(r) === 'miss');
+
+  const errs = graded.flatMap(r => r.candidates
+    .filter(c => c.predicted != null && c.actual != null)
+    .map(c => Math.abs(c.actual - c.predicted)));
+  const mae = errs.length ? errs.reduce((a,b)=>a+b,0)/errs.length : null;
+
+  const tErrs = graded.filter(r => r.predTotal && r.actTotal).map(r => (r.predTotal/r.actTotal-1)*100);
+  const tMean = tErrs.length ? tErrs.reduce((a,b)=>a+b,0)/tErrs.length : null;
+
+  const worst = graded.slice().sort((a,b) => (maeOf(b) ?? 0) - (maeOf(a) ?? 0))[0];
+  const hitRate = graded.length ? hits.length/graded.length*100 : 0;
+
+  const bl = scoreStrategy(HISTORY, BASELINES.alwaysIncumbent);
+  const scored = graded.filter(r => r.winProb != null);
+  const bs = scored.length
+    ? scored.reduce((s,r) => s + brier(r.winProb, r.winProbOn === (winnerOf(r)||{}).name), 0) / scored.length
+    : null;
+
+  const tiers = [];
+  tiers.push({cls:'hard', badge:'当選者的中',
+    title:`<span class="big">${hits.length} / ${graded.length}</span> 　的中率 ${hitRate.toFixed(1)}%`,
+    desc:`予測トップの候補が実際に当選したレース。外したのは ${misses.map(r=>esc(r.name)).join('・') || 'なし'}。`});
+  if (bl.rate != null) tiers.push({cls:'hard', badge:'ベースライン比',
+    title:`「常に現職が勝つ」なら ${bl.hit}/${bl.n}（${bl.rate.toFixed(1)}%）　差 <span class="big">${signed(hitRate-bl.rate)}pt</span>`,
+    desc:`単純なベースラインに勝てて初めてモデルに意味があります。現職不在の空席レースはベースライン側の対象外です。`});
+  if (CV.n) tiers.push({cls:'hard', badge:'交差検証',
+    title:`伏せて測った的中率 ${CV.hits}/${CV.n} · 90%区間の被覆率 <span class="big">${(CV.coverage*100).toFixed(0)}%</span>`,
+    desc:`1レースずつ伏せ、残りだけで係数を推定して予測し直した結果（Leave-One-Out）。被覆率は 90% であるべき値です。` +
+         (CVWF.n ? ` 実運用と同じ「それ以前のデータだけ」で測る walk-forward では ${CVWF.hits}/${CVWF.n} 的中・被覆率 ${(CVWF.coverage*100).toFixed(0)}%。` : '') +
+         ` 上の的中率や誤差はすべて自己採点なので、本当の成績はこちらです。`});
+  if (mae != null) tiers.push({cls:'fact', badge:'得票率の精度',
+    title:`平均絶対誤差 <span class="big">${mae.toFixed(2)}pt</span>`,
+    desc:`予測を出した ${errs.length} 名分の平均。最も外したのは${worst ? `${esc(worst.name)}（${maeOf(worst).toFixed(2)}pt）` : '—'}。当選者を当てることと得票率を当てることは別の能力です。`});
+  if (bs != null) tiers.push({cls:'fact', badge:'確率の質',
+    title:`平均 Brier <span class="big">${bs.toFixed(3)}</span>`,
+    desc:`コイン投げは常に 0.250、100%断言して外すと 1.000。記録があるのは ${scored.length}/${graded.length} レースのみで、全レースで勝率を残さないとこの指標は育ちません。`});
+  if (tMean != null) tiers.push({cls:'uncertain', badge:'投票総数の想定',
+    title:`平均 <span class="big">${signed(tMean)}%</span> のズレ`,
+    desc:`投票総数を${tMean>0?'過大':'過小'}に見積もる傾向。v2 ではこのバイアスを補正係数として予測に組み込んでいます。`});
+  if (skipped.length) tiers.push({cls:'excluded', badge:'集計対象外',
+    title:`${skipped.length} レースを除外`,
+    desc:`${skipped.map(r=>esc(r.name)).join('・')} は事前予測を記録していないため、成績にも係数推定にも使っていません。`});
+
+  document.getElementById('scoreTiers').innerHTML = tiers.map(t => `
+    <div class="tier">
+      <span class="tier-badge ${t.cls}">${t.badge}</span>
+      <div class="tier-body"><h4>${t.title}</h4><p>${t.desc}</p></div>
+    </div>`).join('');
+
+  document.getElementById('scoreNote').innerHTML =
+    `<b>読み方。</b>「的中」は当選者を当てたかどうかだけを指します。得票率がどれだけ正確だったかは平均絶対誤差、` +
+    `投票率の読み違いは投票総数のズレ、確率の付け方が妥当だったかは Brier スコアで、それぞれ別に見る必要があります。` +
+    (worst ? ` 例えば${esc(worst.name)}は当選者こそ的中していますが、得票率は ${maeOf(worst).toFixed(2)}pt ずれています。` : '');
+
+  const caveats = [];
+  caveats.push(`サンプルは <b>${graded.length} レース</b>しかありません。この規模の的中率も Brier も、誤差の範囲で大きく動きます。確定的な性能指標としては読めません。`);
+  if (CV.n) caveats.push(`交差検証で推定される σ は <b>${CV.sdRange[0].toFixed(1)}〜${CV.sdRange[1].toFixed(1)}pt</b> と、どのレースを伏せるかで大きく振れます。下の表の一点の値は確定値ではありません。`);
+  caveats.push(`被覆率は候補 ${CV.coverageN} 名分でしか測っていません。1名の増減で ${(100/Math.max(CV.coverageN,1)).toFixed(0)}pt 動く粒度なので、90% という一致は精度の証明にはなりません。`);
+  if (skipped.length) caveats.push(`${skipped.map(r=>esc(r.name)).join('・')} は事前予測の記録がなく、結果のみを掲載しています。`);
+  const unver = RACES.filter(r => r.candidates.some(c => c.unverified));
+  if (unver.length) caveats.push(`${unver.map(r=>esc(r.name)).join('・')} に一次ソース未確認の得票数が含まれています（該当行に⚠を表示）。`);
+  caveats.push(`過去レースは<b>予測時のスナップショットが残っていません</b>（<code>snapshot.js</code> の導入前）。上の交差検証は当時の予測値から再構成したもので、実際に公開されていた区間そのものではありません。今後のレースは投開票前に凍結して記録されます。`);
+  document.getElementById('scoreCaveat').innerHTML =
+    `<b>この数字を鵜呑みにしないための注意。</b><ul>${caveats.map(c=>`<li>${c}</li>`).join('')}</ul>`;
+}
+
+/* ---------- 手法・係数テーブル ---------- */
+function renderParams(){
+  const P = PARAMS;
+  const rows = [
+    ['得票率 σ（プール）', CV.n ? `${P.share.pooledSdPt.toFixed(2)}pt（実質 ${CV.sdRange[0].toFixed(1)}〜${CV.sdRange[1].toFixed(1)}）` : `${P.share.pooledSdPt.toFixed(2)}pt`, 'fitted',
+     `確定 ${HISTORY.length} レース・${P.share.n} 名分の残差 RMSE。掲載候補だけで正規化し直してから算出（未モデル化候補の取りこぼしと二重に数えないため）。` +
+     (CV.n ? ` 括弧内は交差検証での振れ幅で、どのレースを伏せるかでこれだけ動きます。` : '')],
+    ...Object.entries(P.share.byType).map(([t,v]) => [`　└ 類型「${esc(t)}」`, `${v.toFixed(2)}pt`, 'fitted',
+      `同類型の残差をプール値へ縮小（k=${P.share.shrinkK}）。n が小さいほどプールに寄ります。`]),
+    ['分布の裾（ロジット空間）', `t分布 ν=${P.tailNu}`, 'unfitted',
+     `正規分布より裾を厚くしています。単位分散に標準化してあるため 90%区間はむしろやや狭くなり、効くのは 2.5σ 以遠だけ（3σ で正規の4.3倍、4σ で52倍）。★ν は n=${HISTORY.length} では推定できないため固定値です。`],
+    ['候補間の追加負相関', `${P.share.splitRho}`, 'unfitted',
+     `保守分裂など票を奪い合う組にだけ入れる共分散。★未推定の仮置き。単体上のサンプリング自体が既に負相関を生むため、これは上乗せ分です。`],
+    ['投票総数バイアス補正', `×${P.turnout.biasCorrection.toFixed(4)}`, 'fitted',
+     `過去の「想定総数 ÷ 実際」の対数平均から算出。素の想定値が平均 ${signed((1/P.turnout.biasCorrection-1)*100)}% 過大だったことへの補正。`],
+    ['投票総数の対数σ', `${P.turnout.sigmaLog.toFixed(4)}`, 'fitted',
+     `同残差の標準偏差。1σ でおよそ ±${((Math.exp(P.turnout.sigmaLog)-1)*100).toFixed(1)}%。`],
+    ['投票率の競争度係数', `${P.turnout.betaCompetitiveness}（無効）`, 'unfitted',
+     `接戦ほど投票率が上がる効果。★前回投票率をデータに持たせていないため推定できず、0 で無効化しています。`],
+    ['未モデル化候補の出現確率', `告示前 ${(P.other.presenceUnconfirmed*100).toFixed(0)}% / 告示後 ${(P.other.presenceConfirmed*100).toFixed(0)}%`, 'fitted',
+     `予測に載せていなかった候補が1%超を得た頻度（${P.other.nPresent}/${P.other.n}）。告示後は名簿が確定するため別値。`],
+    ['　└ 出現時の規模', `中央値 ${(P.other.medianGivenPresent*100).toFixed(2)}% / 対数σ ${P.other.sigmaLog.toFixed(2)}`, 'fitted',
+     `零過剰の混合分布。対数正規1本では中央値が下がりすぎ、20%規模の候補が裾に収まりませんでした。`],
+    ['全国共通ショック', `σ=${PARAMS.national.sigmaLogit}（${PARAMS.national.enabled?'有効':'無効'}）`, 'unfitted',
+     `同日・同年のレースで相関する誤差。総分散を保つよう σ から控除して入れているため個別レースの区間はほぼ変わらず、「何勝できるか」の分布にだけ効きます。★未推定。同日開催のレースが複数揃うまで推定できません。`],
+    ['情勢調査の実効誤差', `${P.poll.houseErrorPt}pt`, 'unfitted',
+     `サンプリング誤差に上乗せするハウスエフェクト。★未推定。数値のない定性的な調査（「優位」等）は情報量が乏しいものとして扱い、中心値をほとんど動かしません。`],
+    ['平均回帰 λ', `${P.structural.shrinkLambda}（無効）`, 'unfitted',
+     `前回得票率から中央へ引き戻す強さ。★中心値に既存モデルの出力を入れており、そちらが既に回帰を織り込んでいるため二重適用を避けて 0。構造モデルへ移行したら 0.07 前後から推定。`],
+    ['現職バイアス', `${signed(P.structural.incumbency.biasPt)}pt（無効・n=${P.structural.incumbency.n}）`, 'unfitted',
+     `現職を系統的に過小評価している疑い。★n が ${P.structural.incumbency.minN} に届くまで適用しません。この規模で当てにいくのは過学習です。`],
+  ];
+  document.getElementById('paramTable').innerHTML =
+    `<thead><tr><th>係数</th><th>値</th><th>出どころ</th></tr></thead><tbody>` +
+    rows.map(([k,v,kind,src]) => `<tr><td>${k}</td><td class="v ${kind}">${v}</td><td class="src">${src}</td></tr>`).join('') +
+    `</tbody>`;
+
+  document.getElementById('methodNote').innerHTML =
+    `<b>設計の要点。</b>` +
+    `<ul>` +
+    `<li>得票率を<b>単体（合計100%の面）の上</b>でサンプリングします。候補ごとに独立な区間を描くと、区間上限の合計が100%を超える「存在しない領域」を示してしまいます。</li>` +
+    `<li>マージン（得票差）と勝率を、<b>同時サンプルから直接数えます</b>。「区間の引き算」は、候補の得票率が完全に連動することを無視した計算です。</li>` +
+    `<li>投票総数を<b>独立の確率変数</b>に分離し、過去の過大バイアスを補正しています。得票率の誤差と投票率の誤差が票数の中で混ざらなくなります。</li>` +
+    `<li>「予測に入れていなかった候補」に確率質量を置いています。ただしこれは保険であって免罪符ではありません。京都で20.07%を得た藤井氏は<b>告示済みの登録候補</b>であり、統計以前に名簿を読めば防げた誤りです。</li>` +
+    `</ul>` +
+    `<b>限界。</b>未モデル化候補は合計として扱うため、「想定外の候補が当選する」ケースは構造上表現できません。`;
+}
+
+/* ---------- 一覧カード ---------- */
+function renderGrid(){
+  document.getElementById('raceGrid').innerHTML = RACES.map(race => {
+    const outcome = outcomeOf(race);
+    const isPending = race.status === 'pending';
+    const f = FORECASTS[race.id];
+
+    const chipMap = {
+      pending :'<span class="rc-chip pending">判定待ち</span>',
+      hit     :'<span class="rc-chip hit">当選者的中</span>',
+      miss    :'<span class="rc-chip miss">不的中</span>',
+      norecord:'<span class="rc-chip norecord">事前予測なし</span>',
+    };
+    const mae = maeOf(race);
+    const chips = chipMap[outcome] + (mae != null ? `<span class="rc-chip mae">誤差 ${mae.toFixed(1)}pt</span>` : '');
+
+    const rows = race.candidates.map(c => {
+      const fc = isPending && f ? f.candidates.find(x => x.name === c.name) : null;
+      const barValue = isPending ? (fc ? fc.share : null) : c.actual;
+      if (barValue == null) return '';
+      const isTop = isPending
+        ? (f && f.candidates.reduce((a,b) => a.winProb > b.winProb ? a : b).name === c.name)
+        : c.winner === true;
+
+      let detail;
+      if (isPending && fc){
+        detail = `<small>${fc.votes!=null?nf(fc.votes)+'票(予想)':''} / 勝率 ${fmtProb(fc.winProb, f.sims)}</small>`;
+      } else {
+        const predPart = (c.predicted != null)
+          ? ` / 予想${p1(c.predicted)}%${c.predictedVotes!=null?'('+nf(c.predictedVotes)+'票)':''}`
+          : (c.derived ? ' / 推計' : ' / 事前予測なし');
+        detail = `<small class="${c.unverified?'flag':''}">実際${nf(c.actualVotes)}票${c.unverified?' ⚠未確認':''}${predPart}</small>`;
+      }
+      return `
+        <div class="rc-cand">
+          <div class="n">${esc(c.name)}<small>${esc(c.tag)}</small>${detail}</div>
+          <div class="rc-bar" role="img" aria-label="${esc(c.name+' '+p1(barValue)+'%')}">
+            <i class="${isTop?'win':'lose'}" style="width:${barValue}%"></i>
+          </div>
+          <div class="rc-pct">${p1(barValue)}%</div>
+        </div>`;
+    }).join('');
+
+    const src = [`<p>出典: ${esc(race.source)}</p>`];
+    if (race.note) src.push(`<p class="warn">注記: ${esc(race.note)}</p>`);
+
+    return `
+      <details class="race-card">
+        <summary>
+          <div>
+            <div class="rc-title">${esc(race.name)}</div>
+            <div class="rc-date">${fmtDate(race.date)} · ${esc(race.type)}</div>
+          </div>
+          <div class="rc-chips">${chips}<span class="rc-arrow" aria-hidden="true">▶</span></div>
+        </summary>
+        <div class="rc-body">${rows}<div class="rc-src">${src.join('')}</div></div>
+      </details>`;
+  }).join('');
+}
+
+/* ---------- 起動 ---------- */
+RACES.sort((a,b) => a.date < b.date ? 1 : (a.date > b.date ? -1 : 0));
+document.getElementById('updatedDate').textContent = LAST_UPDATED;
+document.getElementById('footModel').textContent =
+  `POLITISABER MODEL v2 · 単体上のロジット正規サンプリング(t分布 ν=${PARAMS.tailNu}) · MC = ${nf(PARAMS.sims)} · seed = ${PARAMS.seed} · 係数推定に使った過去レース = ${HISTORY.length}`;
+renderPicker();
+renderScorecard();
+renderParams();
+renderGrid();
+</script>
+
+</body>
+</html>
