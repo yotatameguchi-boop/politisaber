@@ -1,0 +1,10 @@
+node_modules/
+.DS_Store
+*.log
+
+# ビルド生成物。engine.js + template.html から再生成できる。
+# ただし「配布物そのものを追跡したい」なら、この行を消してコミットする。
+politisaber.html
+
+# 予測スナップショットは追跡する（較正の唯一の材料なので消さない）
+# forecasts/ は .gitignore に入れないこと
