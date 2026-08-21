@@ -6,11 +6,29 @@
      いまは5件しかなく、ここで出る数字は「機構が動いている」以上の
      意味を持たない。                                                   */
 const E = require('./engine.js');
+const fs = require('fs');
+const path = require('path');
 
-/* ---------------- 過去レース（事前予測を記録したものだけ） ----------------
-   fieldConfirmed … 予測時点で候補者名簿を確認できていたか。
-                    不明なら false（保守的）。                          */
-const HISTORY = [
+/* ---------------- 過去レースの読み込み ----------------
+   ★データの実体は template.html の RACES ひとつだけ。
+     以前ここに HISTORY をベタ書きしていたが、レース結果を追記しても
+     backtest だけ古いままになる事故が実際に起きた。
+     ビルド済み HTML から読むことで、ページと成績が必ず一致する。     */
+function loadHistory(){
+  const built = path.join(__dirname, 'politisaber.html');
+  if (!fs.existsSync(built)) throw new Error('politisaber.html がありません。先に node build.js');
+  const script = fs.readFileSync(built, 'utf8').split('<script>')[1].split('</scr' + 'ipt>')[0];
+  const cut = script.indexOf('/* ---------- ボード ---------- */');
+  if (cut < 0) throw new Error('politisaber.html の構造が想定と違います');
+  return new Function(script.slice(0, cut) + '\nreturn {HISTORY, RACES};')();
+}
+
+const LOADED = loadHistory();
+const HISTORY = LOADED.HISTORY;
+
+/* 参考: 以前ベタ書きしていた形（フィールドの意味の記録として残す）
+   fieldConfirmed … 予測時点で候補者名簿を確認できていたか。不明なら false。
+const _SCHEMA_EXAMPLE = [
   {
     name:'長崎県知事選', date:'2026-02-08', type:'保守分裂',
     fieldConfirmed:false,          // 上位2名のみ掲載＝名簿を網羅していない
@@ -67,6 +85,7 @@ const HISTORY = [
     ],
   },
 ];
+*/
 
 const P = E.fitParams(HISTORY);
 

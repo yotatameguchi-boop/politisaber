@@ -900,18 +900,26 @@ function scoreStrategy(history, pick){
    fieldConfirmed … 告示済みで候補者名簿が確定しているか
    polls[]        … 情勢調査。shares(数値) または lean(定性) を持つ
 ========================================================= */
-const LAST_UPDATED = "2026-08-09";
+const LAST_UPDATED = "2026-08-09";   // 長野県知事選の確定開票結果を反映
 
 const RACES = [
   {
-    id:"nagano2026", name:"長野県知事選", date:"2026-08-09", status:"pending",
-    type:"現職安泰", fieldConfirmed:true, assumedTotalVotes:693617,
-    source:"2022年長野県知事選確定得票(阿部守一88.8%)を土台",
-    polls:[{ source:"信濃毎日新聞 情勢報道", date:"2026-08-05",
-             lean:{ "阿部守一":"優位", "武田良介":"追う" } }],
+    id:"nagano2026", name:"長野県知事選", date:"2026-08-09", status:"decided",
+    type:"現職安泰", source:"SBC信越放送・時事通信 2026/8/9 確定開票結果",
+    note:"投開票前に snapshot.js で予測を凍結してあった初のレース。得票率は2人とも90%区間の内側（誤差 +1.54pt / −1.18pt）、武田氏の得票数は205票差で的中し、Brier は 0.0000。" +
+         "ただし投票総数は外した。素の想定 693,617票に対し実際は 666,108票（+4.1%のズレ）だったが、過去5戦から学んだ −11.4% の過大バイアス補正を掛けたため 615,174票となり、誤差が −7.6% に拡大した。n=5 で推定した補正を6戦目に当てて裏目に出た形で、係数の過信を戒める実例。" +
+         "投票率 40.53% は過去最低（前回比 −0.41pt）。",
+    fieldConfirmed:true,
+    // predTotal は「素の想定」。補正前の値で揃えないと、
+    // biasCorrection を推定する意味が変わってしまう（補正済みの値に
+    // さらに補正を学習させることになる）。
+    predTotal:693617, actTotal:666108,
+    // モデルが実際に公表した投票総数（補正適用後）。表示用。
+    projectedTotal:615174,
+    winProb:0.996, winProbOn:"阿部守一",
     candidates:[
-      {name:"阿部守一", tag:"現職・5期目に挑戦", center:86.0, incumbent:true},
-      {name:"武田良介", tag:"新人・共産党推薦",  center:14.0, incumbent:false},
+      {name:"阿部守一", tag:"現職・5期目", predicted:84.6, predictedVotes:520348, actual:86.13, actualVotes:573742, winner:true,  incumbent:true},
+      {name:"武田良介", tag:"新人・共産党推薦", predicted:15.0, predictedVotes:92571, actual:13.87, actualVotes:92366, winner:false, incumbent:false},
     ],
   },
   {
@@ -1185,7 +1193,10 @@ function renderBoard(race){
 
   if (!isPending){
     if (race.predTotal && race.actTotal){
-      foot.push(`<p>投票総数: 想定 ${nf(race.predTotal)}票 → 実際 ${nf(race.actTotal)}票（<b>${signed((race.predTotal/race.actTotal-1)*100)}%</b>）。得票率の誤差と投票率の誤差は別物です。</p>`);
+      foot.push(`<p>投票総数: 素の想定 ${nf(race.predTotal)}票 → 実際 ${nf(race.actTotal)}票（<b>${signed((race.predTotal/race.actTotal-1)*100)}%</b>）。得票率の誤差と投票率の誤差は別物です。</p>`);
+      if (race.projectedTotal){
+        foot.push(`<p class="warn">⚠ モデルが公表した投票総数は ${nf(race.projectedTotal)}票（過去のバイアス補正を適用後）で、実際との誤差は <b>${signed((race.projectedTotal/race.actTotal-1)*100)}%</b>。補正を掛けたことで誤差が拡大しました。</p>`);
+      }
     } else {
       const aT = actualTotalOf(race);
       if (aT) foot.push(`<p>投票総数（実際）: ${nf(aT)}票</p>`);
