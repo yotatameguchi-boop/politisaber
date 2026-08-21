@@ -26,7 +26,6 @@
 | `backtest.js` | 係数推定・成績計測・交差検証（データは `politisaber.html` から読む） |
 | `snapshot.js` | 予測を投開票前に凍結して `forecasts/` に保存 |
 | `simcheck.js` | 開票速報モデルの検証（合成データ） |
-| `diagnose.js` | 被覆率不足の切り分け（オラクル比較） |
 
 ## 使い方
 
