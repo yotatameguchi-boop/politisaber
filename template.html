@@ -592,7 +592,10 @@ function renderPicker(){
   sel.innerHTML = RACES.map(r => `<option value="${esc(r.id)}">${icon(r)} ${esc(r.name)}（${fmtDate(r.date)}）</option>`).join('');
   sel.addEventListener('change', () => {
     const race = RACES.find(r => r.id === sel.value);
-    if (race) renderBoard(race);
+    if (!race) return;
+    const live = LIVE.state[race.id];
+    if (race.status === 'pending' && live) renderLiveBoard(race, live);
+    else { renderBoard(race); if (race.status === 'pending') refreshLive(); }
   });
   const today = new Date().toISOString().slice(0,10);
   const upcoming = RACES.filter(r => r.status === 'pending' && r.date >= today).sort((a,b) => a.date < b.date ? -1 : 1);
@@ -781,6 +784,109 @@ function renderGrid(){
   }).join('');
 }
 
+/* ---------- ライブモード（開票速報） ----------
+   バックエンド（server/api.js）が居れば開票途中の推定に切り替える。
+   居なければ静的な事前予測のまま。
+
+   設計方針は「段階的強化」:
+     ・まず静的な内容で描画を完了させる（ここは必ず動く）
+     ・そのあと非同期で API を叩き、応答があれば board を差し替える
+   こうするとアーティファクトとして配ったとき（外部通信がCSPで
+   遮断される）も、ローカルでファイルを直接開いたときも壊れない。
+   失敗は握りつぶす — サーバが居ないのは異常ではなく通常の状態。   */
+const LIVE = {
+  // http(s) で配信されているときだけ API を試す。
+  // file:// やアーティファクト、非ブラウザ環境では null にして何もしない。
+  base: (typeof location !== 'undefined' &&
+         (location.protocol === 'http:' || location.protocol === 'https:')) ? '' : null,
+  timeoutMs: 2500,
+  pollMs: 30000,
+  state: {},          // raceId -> 直近のライブ推定
+  timer: null,
+};
+
+async function fetchLive(raceId){
+  if (LIVE.base === null) return null;            // file:// や artifact では試さない
+  try {
+    const res = await fetch(`${LIVE.base}/api/races/${encodeURIComponent(raceId)}/estimate`, {
+      signal: AbortSignal.timeout(LIVE.timeoutMs), cache:'no-store',
+    });
+    if (!res.ok) return null;
+    const j = await res.json();
+    return (j && j.candidates) ? j : null;        // waiting 状態は静的表示のまま
+  } catch { return null; }                        // サーバ不在は通常。黙って諦める
+}
+
+function renderLiveBoard(race, live){
+  const board = document.getElementById('board');
+  const rows = live.candidates.map(c => {
+    const isTop = c.name === live.leader;
+    const barClass = isTop ? 'win' : 'lose';
+    const diff = c.share - c.naiveShare;
+    return `
+      <div class="candidate-row">
+        <div class="cname">${esc(c.name)}<span class="tag">${esc((race.candidates.find(x=>x.name===c.name)||{}).tag ?? '')}</span></div>
+        <div>
+          <div class="bar-track" role="img" aria-label="${esc(c.name+' '+p1(c.share)+'%')}">
+            <div class="bar-fill ${barClass}" data-target="${c.share}" style="width:${c.share}%"></div>
+            <div class="ci-band" style="left:${c.shareCI[0]}%; width:${Math.max(c.shareCI[1]-c.shareCI[0],0.4)}%"></div>
+          </div>
+          <div class="ci-label">90%区間: ${p1(c.shareCI[0])}% – ${p1(c.shareCI[1])}%　／　素朴な按分なら ${p1(c.naiveShare)}%（差 ${signed(diff)}pt）</div>
+        </div>
+        <div class="pctwrap">
+          <div class="pct ${barClass==='win'?'win':''}">
+            <span class="sr-only">${p1(c.share)}%</span>
+            <span class="count" data-target="${c.share}" aria-hidden="true">${p1(c.share)}</span><span aria-hidden="true">%</span>
+          </div>
+          <div class="pctsub">勝率 ${p1(c.winProb)}%</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  const called = live.called
+    ? `<div class="margin-strip" style="background:rgba(62,207,142,0.10);border-color:rgba(62,207,142,0.35)">
+         <span class="ms-label" style="color:var(--green)">当選確実</span>
+         <span class="ms-val">${esc(live.called)}</span>
+         <span class="ms-ci">勝率 ${p1(live.leaderProb)}% ≥ 99.9%</span></div>`
+    : `<div class="margin-strip">
+         <span class="ms-label">開票中</span>
+         <span class="ms-val">${esc(live.leader)} 首位</span>
+         <span class="ms-ci">勝率 ${p1(live.leaderProb)}%</span>
+         <span class="ms-ci">当確の閾値 99.9% に未達</span></div>`;
+
+  board.innerHTML = `
+    <div class="board-head">
+      <div class="race-name">${esc(race.name)} ${fmtDate(race.date)} · 開票速報</div>
+      <span class="badge pending">開票率 ${live.countedPct.toFixed(1)}%</span>
+    </div>
+    ${called}${rows}
+    <div class="board-foot mono">
+      <p>開票 ${live.municipalities.reported}/${live.municipalities.total} 自治体 · ${nf(live.countedVotes)}票 / 推定総数 ${nf(live.projectedTotal)}票</p>
+      <p>自治体ごとの前回得票率を基準線に、県全体のスイングを推定しています。「素朴な按分」は開いた分をそのまま引き伸ばした値で、序盤ほど郡部に偏って外れます。</p>
+      ${live.unknownMunicipalities.length ? `<p class="warn">⚠ レース定義に無い自治体が届いています: ${live.unknownMunicipalities.map(esc).join(', ')}</p>` : ''}
+      <p>最終更新 ${esc(live.asOf.slice(0,19).replace('T',' '))} · 粒子 ${nf(live.particles)}（有効 ${nf(Math.round(live.ess))}）</p>
+    </div>`;
+  animate(board);
+}
+
+/* 現在選択中のレースにライブ結果があれば差し替える */
+async function refreshLive(){
+  const sel = document.getElementById('raceSelect');
+  const race = RACES.find(r => r.id === sel.value);
+  if (!race || race.status !== 'pending') return;
+  const live = await fetchLive(race.id);
+  if (!live) return;
+  LIVE.state[race.id] = live;
+  if (document.getElementById('raceSelect').value === race.id) renderLiveBoard(race, live);
+}
+
+function startLive(){
+  if (LIVE.base === null) return;   // 静的配布時は何もしない
+  refreshLive();
+  clearInterval(LIVE.timer);
+  LIVE.timer = setInterval(refreshLive, LIVE.pollMs);
+}
+
 /* ---------- 起動 ---------- */
 RACES.sort((a,b) => a.date < b.date ? 1 : (a.date > b.date ? -1 : 0));
 document.getElementById('updatedDate').textContent = LAST_UPDATED;
@@ -790,6 +896,7 @@ renderPicker();
 renderScorecard();
 renderParams();
 renderGrid();
+startLive();   // サーバが居れば開票速報へ差し替え。居なければ何も起きない。
 </script>
 
 </body>
