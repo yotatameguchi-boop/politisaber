@@ -19,7 +19,10 @@ const pad = (s,n) => String(s).padStart(n);
 
 async function ingest(raceId, file){
   const race = pipeline.loadRace(raceId);
-  const obs  = await sources.manual.fetchObservations(race, { file });
+  // 拡張子で取り込み方を選ぶ。PDF は選管の開票速報をそのまま食える。
+  const adapter = /\.pdf$/i.test(file) ? sources.senkanPdf : sources.manual;
+  console.log(`  取り込み方式: ${adapter.name}`);
+  const obs  = await adapter.fetchObservations(race, { file });
   const written = store.appendAll(obs);
   console.log(`\n  ${written.length} 件を取り込みました（追記のみ・既存は変更しません）`);
   const snap = store.snapshotAt(raceId);

@@ -28,10 +28,10 @@
 | `simcheck.js` | 開票速報モデルの検証（合成データ） |
 | `server/store.js` | 開票途中経過の追記専用ストア（JSONL） |
 | `server/pipeline.js` | 観測 → 開票速報の推定 |
-| `server/sources/` | 取り込みアダプタ（CSV/JSON 手入力 ＋ スクレイパ雛形） |
+| `server/sources/` | 取り込みアダプタ（選管PDF ／ CSV・JSON 手入力） |
 | `server/api.js` | HTTP API（外部依存なし） |
 | `server/cli.js` | 開票当日の操作口 |
-| `server/test.js` | バックエンドの端から端までの検証（22件） |
+| `server/test.js` | バックエンドの端から端までの検証（25件） |
 | `tools/parse_senkan_pdf.py` | 選管の開票結果PDFから市町村別得票を抽出（Python） |
 
 ## 使い方
@@ -143,7 +143,8 @@ node server/cli.js ingest   okinawa2026 in.csv # 途中経過を取り込む
 node server/cli.js estimate okinawa2026        # 現在の推定
 node server/cli.js replay   okinawa2026        # 開票の進行に沿った推移
 node server/api.js                             # HTTP API（既定 8787）
-node server/test.js                            # 22件のテスト
+node server/cli.js ingest okinawa2026 sokuho.pdf  # 選管PDFを直接取り込む
+node server/test.js                            # 25件のテスト
 ```
 
 `server/api.js` は API と一緒に `politisaber.html` も同一オリジンで配信します。
@@ -205,10 +206,16 @@ README 冒頭で書いた分担（Python でオフライン処理 → JSON → J
 更新も削除もしません。これで任意の時刻断面を再構成でき（`estimate --asOf`）、訂正報道も
 追え、書き換えによる捏造ができなくなります。
 
-**スクレイパは同梱していません。** 実物のページ構造を確認せずに書いたスクレイパは、
-動いているように見えて静かに誤った数字を入れます。このプロジェクトが最も避けたい失敗
-そのものなので、アダプタの契約と検証だけ用意して、実装は実際のページを見てからにしてあります。
-手入力の CSV/JSON アダプタは完成していて、1レースの開票当日はこれで回せます。
+**取り込みは選管PDFを直接食えます。** 開票当日、選管は同じ書式のPDFを繰り返し差し替えて
+公開します。前回選挙の確定版で検証済みのパーサがそのまま使えるので、「未知のHTMLを推測して
+書くスクレイパ」とは危険性の質が違います。`ingest` に `.pdf` を渡せば自動でこの経路になります。
+
+```bash
+node server/cli.js ingest okinawa2026 sokuho.pdf
+```
+
+2022年の確定版PDFを固定フィクスチャとしてテストに組み込んであり、41市町村の取り込みと
+合計の公表値一致を毎回検証しています。CSV/JSON の手入力アダプタも併存します。
 
 **取り込みは疑わしきを弾きます。** 候補者名がレース定義と違う、定義に無い自治体名、
 非負整数でない得票数 — いずれもエラーにします。黙って 0 票として通すのが一番危険なので。

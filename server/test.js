@@ -124,6 +124,38 @@ t('引用符が閉じていない CSV を弾く', () => {
   assert.throws(() => sources.parseCsv('municipality,候補A,候補B\n市町村03,"12,34\n', race, 'x'), /引用符/);
 });
 
+/* ---------- 3b. 選管PDFからの取り込み ---------- */
+console.log('\n3b. 選管PDFからの取り込み');
+const PDF = path.join(__dirname, '..', 'tools', 'fixtures', 'okinawa2022-kaihyo-kakutei.pdf');
+const okinawaPath = path.join(__dirname, '..', 'data', 'races', 'okinawa2026.json');
+const pdfTests = [];
+if (fs.existsSync(PDF) && fs.existsSync(okinawaPath)){
+  const okinawa = JSON.parse(fs.readFileSync(okinawaPath, 'utf8'));
+  okinawa.municipalities = okinawa.municipalities.map(m => ({...m}));
+  pdfTests.push(
+    sources.senkanPdf.fetchObservations(okinawa, { file: PDF }).then(obs => {
+      t('選管PDFから41市町村を取り込める', () => {
+        assert.strictEqual(obs.length, 41, `${obs.length} 件`);
+      });
+      t('取り込んだ合計が公表値と一致する', () => {
+        const tot = {};
+        for (const o of obs) for (const [k,v] of Object.entries(o.votes)) tot[k] = (tot[k]||0)+v;
+        assert.strictEqual(tot['玉城デニー'], 339767, `玉城 ${tot['玉城デニー']}`);
+        assert.strictEqual(tot['古謝玄太'],   274844, `古謝 ${tot['古謝玄太']}`);
+        assert.strictEqual(tot['下地幹郎'],    53677, `下地 ${tot['下地幹郎']}`);
+      });
+      t('PDFの列名がレース定義に対応しない場合は弾く', () => {
+        assert.throws(() => sources.resolveColumns
+          ? sources.resolveColumns({ ...okinawa, pdf:{ columns:['誰か','別の人','三人目'] } })
+          : require('./sources/senkan-pdf.js').resolveColumns({ ...okinawa, pdf:{ columns:['誰か','別の人','三人目'] } }),
+          /対応しません/);
+      });
+    }).catch(e => bad('選管PDFの取り込み', e.message))
+  );
+} else {
+  console.log('  \x1b[90m· PDFフィクスチャが無いため省略\x1b[0m');
+}
+
 /* ---------- 4. 推定の収束 ---------- */
 console.log('\n4. 開票の進行に沿った推定');
 // 一度きれいにして、小さい自治体から順に投入する
@@ -190,6 +222,7 @@ function call(method, url, body){
   });
 }
 (async () => {
+  await Promise.all(pdfTests);
   const r1 = await call('GET','/api/races');
   t('GET /api/races がレース一覧を返す', () => {
     assert.strictEqual(r1.code, 200);

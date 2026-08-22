@@ -136,7 +136,9 @@ function makeScraper(name, url, parse){
   };
 }
 
-const REGISTRY = { manual };
+const { senkanPdf } = require('./senkan-pdf.js');
+
+const REGISTRY = { manual, 'senkan-pdf': senkanPdf };
 
 function get(name){
   const a = REGISTRY[name];
@@ -144,4 +146,4 @@ function get(name){
   return a;
 }
 
-module.exports = { get, manual, makeScraper, parseCsv, splitCsvLine, REGISTRY };
+module.exports = { get, manual, senkanPdf, makeScraper, parseCsv, splitCsvLine, REGISTRY };
